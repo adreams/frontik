@@ -1,16 +1,17 @@
-import sys
-import os.path
 import imp
-
-import tornado.web
-import tornado.ioloop
 import logging
-from tornado.options import options
+import os.path
+import sys
 
-import frontik.magic_imp
-import frontik.version
-import frontik.doc
+from tornado.options import options
+import tornado.ioloop
+import tornado.web
+
 from frontik import etree
+import frontik.doc
+import frontik.magic_imp
+import frontik.stats
+import frontik.version
 
 log = logging.getLogger('frontik.server')        
 
@@ -30,8 +31,8 @@ class VersionHandler(tornado.web.RequestHandler):
 
 class StatusHandler(tornado.web.RequestHandler):
     def get(self):
-        self.write('pages served: %s\n' % (handler.stats.page_count,))
-        self.write('http reqs made: %s\n' % (handler.stats.http_reqs_count,))
+        self.write('pages served: %s\n' % (frontik.stats.stats.page_count,))
+        self.write('http reqs made: %s\n' % (frontik.stats.stats.http_reqs_count,))
 
 
 class StopHandler(tornado.web.RequestHandler):

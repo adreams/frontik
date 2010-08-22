@@ -1,16 +1,19 @@
 # -*- coding: utf-8 -*-
 
+from functools import partial
 import os.path
-import weakref
 import time
 import urllib
+import weakref
 
 import tornado.autoreload
 import tornado.options
 
 from frontik import etree
-import frontik.util
 import frontik.auth
+import frontik.future
+import frontik.stats
+import frontik.util
 import frontik.xml_util
 
 import logging
@@ -67,6 +70,7 @@ class FileCache(object):
 
 def _source_comment(src):
     return etree.Comment('Source: {0}'.format(frontik.util.asciify_url(src).replace('--', '%2D%2D')))
+
 
 def xml_from_file(filename):
     ''' 
@@ -198,3 +202,84 @@ class PageHandlerXML(object):
 
         return self.doc.to_string()
        
+    ### http stuff
+
+    def get_url(self, url, data={}, headers={}, connect_timeout=0.5, request_timeout=2, callback=None):
+        placeholder = frontik.future.Placeholder()
+
+        self.handler.fetch_request(
+            frontik.util.make_get_request(url, data, headers, connect_timeout, request_timeout),
+            partial(self._fetch_request_response, placeholder, callback))
+
+        return placeholder
+
+    def get_url_retry(self, url, data={}, headers={}, retry_count=3, retry_delay=0.1, connect_timeout=0.5, request_timeout=2, callback=None):
+        placeholder = frontik.future.Placeholder()
+
+        req = frontik.util.make_get_request(url, data, headers, connect_timeout, request_timeout)
+
+        self.handler.fetch_request_retry(req, retry_count, retry_delay,
+                                         partial(self._fetch_request_response, placeholder, callback))
+
+        return placeholder
+        
+    def post_url(self, url, data={},
+                 headers={},
+                 files={},
+                 connect_timeout=0.5, request_timeout=2,
+                 callback=None):
+        
+        placeholder = frontik.future.Placeholder()
+        
+        self.fetch_request(
+            frontik.util.make_post_request(url, data, headers, files, connect_timeout, request_timeout),
+            partial(self._fetch_request_response, placeholder, callback))
+        
+        return placeholder
+
+    def _parse_response(self, response):
+        '''
+        return :: (placeholder_data, response_as_xml)
+        None - в случае ошибки парсинга
+        '''
+
+        if response.error:
+            self.log.warn('%s failed %s (%s)', response.code, response.effective_url, str(response.error))
+            data = [etree.Element('error', dict(url=response.effective_url, reason=str(response.error), code=str(response.code)))]
+
+            if response.body:
+                try:
+                    data.append(etree.Comment(response.body.replace("--", "%2D%2D")))
+                except ValueError:
+                    self.log.warn("Could not add debug info in XML comment with unparseable response.body. non-ASCII response.")
+                    
+            return (data, None)
+        else:
+            try:
+                element = etree.fromstring(response.body)
+            except:
+                if len(response.body) > 100:
+                    body_preview = '{0}...'.format(response.body[:100])
+                else:
+                    body_preview = response.body
+
+                self.log.warn('failed to parse XML response from %s data "%s"',
+                                 response.effective_url,
+                                 body_preview)
+
+                return (etree.Element('error', dict(url=response.effective_url, reason='invalid XML')),
+                        None)
+
+            else:
+                return ([frontik.handler_xml._source_comment(response.effective_url), element],
+                        element)
+
+    def _fetch_request_response(self, placeholder, callback, response):
+        self.log.debug('got %s %s in %.2fms', response.code, response.effective_url, response.request_time*1000)
+        
+        data, xml = self._parse_response(response)
+        placeholder.set_data(data)
+
+        if callback:
+            callback(xml, response)
+

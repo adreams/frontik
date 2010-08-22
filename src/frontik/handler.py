@@ -21,15 +21,14 @@ from frontik import etree
 import frontik.async
 import frontik.auth
 import frontik.doc
-import frontik.http
-import frontik.util
-import frontik.handler_xml
 import frontik.handler_whc_limit
+import frontik.handler_xml
+import frontik.http
+import frontik.stats
+import frontik.util
 
 import logging
 log = logging.getLogger('frontik.handler')
-
-import future
 
 # TODO cleanup this after release of frontik with frontik.async
 AsyncGroup = frontik.async.AsyncGroup
@@ -42,17 +41,6 @@ class HTTPError(tornado.web.HTTPError):
             del kwargs[kwarg]
         tornado.web.HTTPError.__init__(self, status_code, *args, **kwargs)
 
-
-class Stats(object):
-    def __init__(self):
-        self.page_count = 0
-        self.http_reqs_count = 0
-
-    def next_request_id(self):
-        self.page_count += 1
-        return self.page_count
-
-stats = Stats()
 
 class PageLogger(logging.Logger):
     '''
@@ -112,7 +100,7 @@ class PageHandler(tornado.web.RequestHandler):
     def __init__(self, ph_globals, application, request):
         self.handler_started = time.time()
 
-        self.request_id = request.headers.get('X-Request-Id', stats.next_request_id())
+        self.request_id = request.headers.get('X-Request-Id', frontik.stats.stats.next_request_id())
         self.log = PageLogger(self.request_id)
 
         self.ph_globals = ph_globals
@@ -255,48 +243,20 @@ class PageHandler(tornado.web.RequestHandler):
 
     ###
 
-    def fetch_url(self, url, callback=None):
-        """
-        Прокси метод для get_url, логирующий употребления fetch_url
-        """
-        from urlparse import parse_qs, urlparse
-
-        self.log.error("Used deprecated method `fetch_url`. %s", traceback.format_stack()[-2][:-1])
-        scheme, netloc, path, params, query, fragment = urlparse(url)
-        new_url = "{0}://{1}{2}".format(scheme, netloc, path)
-        query = parse_qs(query)
-
-        return self.get_url(new_url, data=query, callback=callback)
-
     def fetch_request(self, req, callback):
-        if not self._finished:
-            stats.http_reqs_count += 1
+        frontik.stats.stats.http_reqs_count += 1
 
-            req.headers['X-Request-Id'] = self.request_id
+        req.headers['X-Request-Id'] = self.request_id
 
-            return self.http_client.fetch(
-                    req,
-                    self.finish_group.add(self.async_callback(callback)))
-        else:
-            self.log.warn('attempted to make http request to %s while page is already finished; ignoring', req.url)
+        return self.http_client.fetch(
+                req,
+                self.finish_group.add(self.async_callback(callback)))
 
-    def get_url(self, url, data={}, headers={}, connect_timeout=0.5, request_timeout=2, callback=None):
-        placeholder = future.Placeholder()
-
-        self.fetch_request(
-            frontik.util.make_get_request(url, data, headers, connect_timeout, request_timeout),
-            partial(self._fetch_request_response, placeholder, callback))
-
-        return placeholder
-
-    def get_url_retry(self, url, data={}, headers={}, retry_count=3, retry_delay=0.1, connect_timeout=0.5, request_timeout=2, callback=None):
-        placeholder = future.Placeholder()
-
-        req = frontik.util.make_get_request(url, data, headers, connect_timeout, request_timeout)
-
+    def fetch_request_retry(self, req, retry_count, retry_delay, callback):
         def step1(retry_count, response):
             if response.error and retry_count > 0:
                 self.log.warn('failed to get %s; retries left = %s; retrying', response.effective_url, retry_count)
+                
                 # TODO use handler-specific ioloop
                 if retry_delay > 0:
                     tornado.ioloop.IOLoop.instance().add_timeout(time.time() + retry_delay,
@@ -307,74 +267,29 @@ class PageHandler(tornado.web.RequestHandler):
                 if response.error and retry_count == 0:
                     self.log.warn('failed to get %s; no more retries left; give up retrying', response.effective_url)
 
-                self._fetch_request_response(placeholder, callback, response)
+                callback(response)
 
         def step2(retry_count):
-            self.http_client.fetch(req, self.finish_group.add(self.async_callback(partial(step1, retry_count - 1))))
+            self.fetch_request(req, partial(step1, retry_count - 1))
 
-        self.http_client.fetch(req, self.finish_group.add(self.async_callback(partial(step1, retry_count - 1))))
-        
-        return placeholder
+        return self.fetch_request(req, partial(step1, retry_count - 1))
 
-    def post_url(self, url, data={},
-                 headers={},
-                 files={},
-                 connect_timeout=0.5, request_timeout=2,
-                 callback=None):
-        
-        placeholder = future.Placeholder()
-        
-        self.fetch_request(
-            frontik.util.make_post_request(url, data, headers, files, connect_timeout, request_timeout),
-            partial(self._fetch_request_response, placeholder, callback))
-        
-        return placeholder
+    def get_url(self, *args, **kw):
+        return self.xml.get_url(*args, **kw)
 
-    def _parse_response(self, response):
-        '''
-        return :: (placeholder_data, response_as_xml)
-        None - в случае ошибки парсинга
-        '''
+    def get_url_retry(self, *args, **kw):
+        return self.xml.get_url_retry(*args, **kw)
 
-        if response.error:
-            self.log.warn('%s failed %s (%s)', response.code, response.effective_url, str(response.error))
-            data = [etree.Element('error', dict(url=response.effective_url, reason=str(response.error), code=str(response.code)))]
+    def post_url(self, *args, **kw):
+        return self.xml.post_url(*args, **kw)
 
-            if response.body:
-                try:
-                    data.append(etree.Comment(response.body.replace("--", "%2D%2D")))
-                except ValueError:
-                    self.log.warn("Could not add debug info in XML comment with unparseable response.body. non-ASCII response.")
-                    
-            return (data, None)
-        else:
-            try:
-                element = etree.fromstring(response.body)
-            except:
-                if len(response.body) > 100:
-                    body_preview = '{0}...'.format(response.body[:100])
-                else:
-                    body_preview = response.body
+    ###
 
-                self.log.warn('failed to parse XML response from %s data "%s"',
-                                 response.effective_url,
-                                 body_preview)
+    def xml_from_file(self, filename):
+        return self.xml.xml_from_file(filename)
 
-                return (etree.Element('error', dict(url=response.effective_url, reason='invalid XML')),
-                        None)
-
-            else:
-                return ([frontik.handler_xml._source_comment(response.effective_url), element],
-                        element)
-
-    def _fetch_request_response(self, placeholder, callback, response):
-        self.log.debug('got %s %s in %.2fms', response.code, response.effective_url, response.request_time*1000)
-        
-        data, xml = self._parse_response(response)
-        placeholder.set_data(data)
-
-        if callback:
-            callback(xml, response)
+    def set_xsl(self, filename):
+        return self.xml.set_xsl(filename)
 
     ###
 
@@ -417,11 +332,3 @@ class PageHandler(tornado.web.RequestHandler):
     def _prepare_finish_plaintext(self):
         self.log.debug("finishing plaintext")
         return self.text
-
-    ###
-
-    def xml_from_file(self, filename):
-        return self.xml.xml_from_file(filename)
-
-    def set_xsl(self, filename):
-        return self.xml.set_xsl(filename)
