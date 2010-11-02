@@ -1,3 +1,9 @@
+frontik (2.3.1.1) unstable; urgency=low
+
+  * fixed HH-16494. fix.fix ver+1 and bad git branch added
+
+ -- Pavel Trukhanov <p.trukhanov@hh.ru>  Tue, 02 Nov 2010 14:40:10 +0300
+
 frontik (2.3.1) unstable; urgency=low
 
   [ Andrew Sumin ]
