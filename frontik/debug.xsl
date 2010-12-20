@@ -12,6 +12,15 @@
         </xsl:if>
     </xsl:variable>
 
+    <xsl:variable name="xsltprofile-sort">
+        <xsl:choose>
+            <xsl:when test="/log/@xsltprofile != ''">
+                <xsl:value-of select="/log/@xsltprofile"/>
+            </xsl:when>
+            <xsl:otherwise>time</xsl:otherwise>
+        </xsl:choose>
+    </xsl:variable>
+
     <xsl:template match="/log">
         <html>
             <head>
@@ -27,9 +36,52 @@
                     status:
                     <xsl:value-of select="@code"/>
                 </div>
-                <xsl:apply-templates select="entry"/>
+                <xsl:apply-templates select="entry[profile]"/>
+                <xsl:apply-templates select="entry[not(profile)]"/>
             </body>
         </html>
+    </xsl:template>
+
+    <xsl:template match="entry[profile]">
+        <div class="textentry">
+            <xsl:apply-templates select="profile" mode="xsltprofile"/>
+        </div>
+    </xsl:template>
+
+    <xsl:template match="profile" mode="xsltprofile">
+        <table class="xsltprofile">
+            <thead><tr>
+                <xsl:apply-templates select="template[1]/@*[name()!='rank']" mode="xsltprofile"/>
+            </tr></thead>
+            <tbody>
+                <xsl:apply-templates select="template" mode="xsltprofile">
+                    <xsl:sort select="@*[name()=$xsltprofile-sort][1]" data-type="number" order="descending"/>
+                </xsl:apply-templates>
+            </tbody>
+        </table>
+    </xsl:template>
+
+    <xsl:template match="@*" mode="xsltprofile">
+        <th>
+            <xsl:value-of select="name()"/>
+        </th>
+    </xsl:template>
+
+    <xsl:template match="@*[name()='time']" mode="xsltprofile">
+        <th>
+            <xsl:value-of select="name()"/>
+            (<xsl:value-of select="sum(ancestor::profile/template/@time)"/>)
+        </th>
+    </xsl:template>
+
+    <xsl:template match="template" mode="xsltprofile">
+        <tr>
+            <xsl:apply-templates select="@*[name()!='rank']" mode="xsltprofile-td"/>
+        </tr>
+    </xsl:template>
+
+    <xsl:template match="@*" mode="xsltprofile-td">
+        <td><xsl:value-of select="."/></td>
     </xsl:template>
 
     <xsl:template match="entry[contains(@msg, 'finish group') and /log/@mode != 'full']"/>
@@ -201,8 +253,10 @@
 
     <xsl:template match="log" mode="css">
         <style>
+            * {font-size: 12px;}
+
             body, pre{
-                font-family:Arial;
+                font-family: Tahoma,sans-serif;
             }
             pre{
                 margin:0;
@@ -210,7 +264,7 @@
             .textentry{
                 padding-left:20px;
                 padding-right:20px;
-                margin-bottom:4px;
+                margin-bottom:2px;
             }
                 .m-textentry__expandable{
                     padding-top:3px;
@@ -234,6 +288,20 @@
                     overflow:hidden;
                     cursor:pointer;
                 }
+
+            .xsltprofile {
+                border-collapse: collapse;
+            }
+            .xsltprofile tbody tr:hover {
+                background: #ffcccc
+            }
+
+            .xsltprofile td, .xsltprofile th {
+                padding: 2px 5px;
+                border-bottom: 1px solid #aaa;
+                text-align: left;
+            }
+
             .headers{
             }
             .details{
@@ -252,7 +320,7 @@
             }
             .servicelink{
                 color:#666;
-                font-size:.8em;
+                font-size:12px;
             }
             .coloredxml__line{
                 padding: 0px 0px 0px 20px;
@@ -277,7 +345,7 @@
             }
             .delimeter{
                 margin-top:10px;
-                font-size:.8em;
+                font-size:12px;
                 color:#999;
             }
             .ecxeption{

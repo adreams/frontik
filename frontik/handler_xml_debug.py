@@ -142,6 +142,9 @@ class DebugPageHandler(logging.Handler):
         if getattr(record, "request", None):
             entry.append(request_to_xml(record.request))
 
+        if getattr(record, "xsltprofile", None):
+            entry.append(record.xsltprofile)
+
         self.log_data.append(entry)
 
 
@@ -149,7 +152,7 @@ class PageHandlerDebug(object):
     def __init__(self, handler):
         self.handler = weakref.proxy(handler)
 
-        if self.handler.get_argument('debug', None) is not None or self.handler.get_cookie("debug") is not None:
+        if self.handler.get_argument('debug', None) is not None or self.handler.get_cookie("debug") is not None or self.handler.get_argument('xsltprofile',None) is not None:
             self.handler.require_debug_access()
             self.handler.log.debug('debug mode is on due to ?debug query arg')
             self.debug_mode = True
@@ -169,6 +172,7 @@ class PageHandlerDebug(object):
         self.debug_log_handler.log_data.set("code", str(status_code))
         self.debug_log_handler.log_data.set("mode", self.handler.get_argument('debug', 'text'))
         self.debug_log_handler.log_data.set("request-id", str(self.handler.request_id))
+        self.debug_log_handler.log_data.set("xsltprofile", self.handler.get_argument('xsltprofile',''))
 
         # if we have 500 but have "noxsl" in args without "debug" in args
         # apply xsl for debug info anyway

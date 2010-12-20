@@ -6,6 +6,7 @@ import threading
 import time
 import urllib
 import weakref
+import copy
 
 import lxml.etree as etree
 import tornado.autoreload
@@ -72,7 +73,7 @@ def _source_comment(src):
     return etree.Comment('Source: {0}'.format(frontik.util.asciify_url(src).replace('--', '%2D%2D')))
 
 def xml_from_file(filename):
-    ''' 
+    '''
     filename -> (status, et.Element)
 
     status == True - результат хороший можно кешировать
@@ -96,7 +97,7 @@ def xml_from_file(filename):
 def xsl_from_file(filename):
     '''
     filename -> (True, et.XSLT)
-    
+
     в случае ошибки выкидывает исключение
     '''
 
@@ -142,6 +143,7 @@ class PageHandlerXML(object):
 
         self.doc = frontik.doc.Doc(root_node = etree.Element('doc', frontik = 'true'))
         self.transform = None
+
         if not self.handler.config.apply_xsl:
             self.log.debug('ignoring set_xsl() because config.apply_xsl=%s', self.handler.config.apply_xsl)
             self.apply_xsl = False
@@ -152,6 +154,12 @@ class PageHandlerXML(object):
             self.log.debug('apply_xsl==False due to ?noxsl query arg')
         else:
             self.apply_xsl = True
+
+        if self.handler.get_argument('xsltprofile', None) is not None:
+            self.handler.require_debug_access()
+            self.xslt_profile = True
+        else:
+            self.xslt_profile = False
 
     def xml_from_file(self, filename):
         return self.xml_cache.load(filename)
@@ -165,7 +173,12 @@ class PageHandlerXML(object):
         self.transform_filename = filename
 
         try:
+
             self.transform = self.xsl_cache.load(filename)
+
+            if self.xslt_profile:
+                # в transform накапливаются данные профайлинга :/
+                self.transform = copy.deepcopy(self.transform)
 
         except etree.XMLSyntaxError, error:
             self._set_xsl_log_and_raise('failed parsing XSL file {0} (XML syntax)')
@@ -193,10 +206,16 @@ class PageHandlerXML(object):
 
         def apply_xsl():
             t = time.time()
-            result = str(self.transform(self.doc.to_etree_element()))
+
+            result = self.transform(self.doc.to_etree_element(),profile_run=self.xslt_profile)
+            if self.xslt_profile:
+                self.log.debug('xslt profiling affected timings.',extra={'xsltprofile':result.xslt_profile.getroot()})
+                del self.transform
+
             self.log.stage_tag("xsl")
             self.log.debug('applied XSL %s in %.2fms', self.transform_filename, (time.time() - t) * 1000)
-            return result
+
+            return str(result)
 
         self.handler.executor.add_job(apply_xsl, cb, reraise_in_ioloop)
 
@@ -207,4 +226,3 @@ class PageHandlerXML(object):
         self.handler.set_header('Content-Type', 'application/xml')
 
         cb(self.doc.to_string())
-
