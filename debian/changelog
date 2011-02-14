@@ -1,4 +1,4 @@
-frontik (2.3.2) unstable; urgency=low
+frontik (2.3.5) unstable; urgency=low
 
   * fixed HH-18153 tornado error codes are correctly forwarded.
 
