@@ -5,6 +5,7 @@ import time
 import urllib2
 import lxml.etree as etree
 import nose
+import frontik.handler
 
 from integration_util import get_page, FrontikTestInstance
 
@@ -169,6 +170,20 @@ def test_error_in_cb():
         xml = etree.fromstring(urllib2.urlopen("http://localhost:{0}/test_app/bad_page/?port={0}".format(srv_port)).read())
         assert (xml.text == "4242")
 
+def test_finish_with_401():
+    with frontik_debug.instance() as srv_port:
+        try:
+            answer = urllib2.urlopen("http://localhost:{0}/test_app/finish_401/".format(srv_port))
+        except Exception as e:
+            print e.__dict__
+            assert (e.msg == "Unauthorized" and e.code == 401)
+
+
+def test_finish_page_exception_xml():
+    with frontik_debug.instance() as srv_port:
+        answer = urllib2.urlopen("http://localhost:{0}/test_app/test_finish_exception".format(srv_port)).read()
+        xml = etree.fromstring(answer)
+        assert (xml.text == "42")
 
 if __name__ == "__main__":
     nose.main()

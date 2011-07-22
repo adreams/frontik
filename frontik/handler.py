@@ -86,6 +86,16 @@ class FinishException(tornado.web.HTTPError):
     def __init__(self, status_code=200, log_message=None, *args):
         super(FinishException, self).__init__(status_code, log_message, args)
 
+class HTTPErrorNew(tornado.web.HTTPError):
+    """An exception that will turn into an HTTP error response."""
+    def __init__(self, status_code, headers = {}, log_message=None, *args, **kwargs):
+        for data in ["text", "xml", "xsl"]:
+            setattr(self, data, kwargs.setdefault(data, None))
+        self.status_code = status_code
+        self.log_message = log_message
+        self.headers = headers
+        self.args = args
+
 class Stats(object):
     def __init__(self):
         self.page_count = 0
@@ -213,76 +223,55 @@ class PageHandler(tornado.web.RequestHandler):
                 self.finish_with_401()
 
     def finish_with_401(self, auth_header='Basic realm="Secure Area"'):
-        raise tornado.web.HTTPErrorEx(401, headers={'WWW-Authenticate': auth_header})
+        raise HTTPErrorNew(401, headers={'WWW-Authenticate': auth_header})
 
 
     def get_error_html(self, status_code, **kwargs):
-        if not self._prepared:
+        if not self._prepared or not self.debug.debug_mode_logging:
             # *explicitly* use default tornado error page for unprepared
             # handlers (working handlers count limit for example)
             return super(PageHandler, self).get_error_html(status_code, **kwargs)
-
-        if self.debug.debug_mode_logging:
-            return self.debug.get_debug_page(status_code, **kwargs)
         else:
-            return super(PageHandler, self).get_error_html(status_code, **kwargs)
+            return self.debug.get_debug_page(status_code, **kwargs)
+
 
     def send_error(self, status_code = 500, **kwargs):
-        def standard_send_error():
-            return super(PageHandler, self).send_error(status_code, **kwargs)
-
-        def xsl_send_error():
-            return
-
-        def plaintext_send_error():
-            return
-
         exception = kwargs.get("exception", None)
 
         if exception:
             self.set_status(status_code)
-
+            if status_code == 200:
+                self.finish_page()
             if getattr(exception, "text", None) is not None:
-                self.set_plaintext_response(exception.text)
-                return plaintext_send_error()
-
+                self.text = exception.text
+                return # add logic for text return
             if getattr(exception, "xml", None) is not None:
                 self.doc.put(exception.xml)
-
                 if getattr(exception, "xsl", None) is not None:
                     self.set_xsl(exception.xsl)
-                    return xsl_send_error()
+                    return  #add logic fo xml with xsl return
                 elif self.transform:
-                    return xsl_send_error()
+                    return  #add logic fo xml with xsl return
                 else:
-                    return standard_send_error()
-        return standard_send_error()
+                    return super(PageHandler, self).send_error(status_code, **kwargs)
+
+        return super(PageHandler, self).send_error(status_code, **kwargs)
 
     @tornado.web.asynchronous
     def post(self, *args, **kw):
-        if not self._finished:
-            try:
-                self.post_page()
-            except FinishException:
-                pass
+            self.post_page()
             self.finish_page()
 
     @tornado.web.asynchronous
     def get(self, *args, **kw):
         if not self._finished:
-            try:
-                self.get_page()
-            except FinishException:
-                pass
+            self.get_page()
             self.finish_page()
 
     @tornado.web.asynchronous
     def head(self, *args, **kwargs):
         if not self._finished:
-            try:
-                self.get_page()
-            except FinishException:
-                pass
+            self.get_page()
             self.finish_page()
 
     def finish(self, chunk = None):
