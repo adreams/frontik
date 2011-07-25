@@ -3,4 +3,4 @@ import frontik.handler
 
 class Page(frontik.handler.PageHandler):
     def get_page(self):
-        self.finish_with_401()
+        raise frontik.handler.HTTPError(401, headers={'WWW-Authenticate': 'Basic realm="Secure Area"'})

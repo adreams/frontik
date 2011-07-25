@@ -76,19 +76,7 @@ AsyncGroup = frontik.async.AsyncGroup
 
 class HTTPError(tornado.web.HTTPError):
     """An exception that will turn into an HTTP error response."""
-    def __init__(self, status_code, *args, **kwargs):
-        for kwarg in ["text", "xml", "xsl"]:
-            setattr(self, kwarg, kwargs.setdefault(kwarg, None))
-            del kwargs[kwarg]
-        tornado.web.HTTPError.__init__(self, status_code, *args, **kwargs)
-
-class FinishException(tornado.web.HTTPError):
-    def __init__(self, status_code=200, log_message=None, *args):
-        super(FinishException, self).__init__(status_code, log_message, args)
-
-class HTTPErrorNew(tornado.web.HTTPError):
-    """An exception that will turn into an HTTP error response."""
-    def __init__(self, status_code, headers = {}, log_message=None, *args, **kwargs):
+    def __init__(self, status_code, headers = dict(), log_message=None, *args, **kwargs):
         for data in ["text", "xml", "xsl"]:
             setattr(self, data, kwargs.setdefault(data, None))
         self.status_code = status_code
@@ -220,10 +208,11 @@ class PageHandler(tornado.web.RequestHandler):
                     self, check_login, check_passwd)
 
             if not self.debug_access:
-                self.finish_with_401()
+                raise HTTPError(401, headers={'WWW-Authenticate': 'Basic realm="Secure Area"'})
 
     def finish_with_401(self, auth_header='Basic realm="Secure Area"'):
-        raise HTTPErrorNew(401, headers={'WWW-Authenticate': auth_header})
+        #TODO remove this function after cleanup in hh.sites.api - no uses here
+        raise HTTPError(401, headers={'WWW-Authenticate': auth_header})
 
 
     def get_error_html(self, status_code, **kwargs):
@@ -243,15 +232,18 @@ class PageHandler(tornado.web.RequestHandler):
             if status_code == 200:
                 self.finish_page()
             if getattr(exception, "text", None) is not None:
+                #TODO add logic for concrete use case
                 self.text = exception.text
-                return # add logic for text return
+                return
             if getattr(exception, "xml", None) is not None:
+                #TODO add logic for concrete use case
                 self.doc.put(exception.xml)
                 if getattr(exception, "xsl", None) is not None:
+                    #TODO add logic for concrete use case
                     self.set_xsl(exception.xsl)
-                    return  #add logic fo xml with xsl return
+                    return
                 elif self.transform:
-                    return  #add logic fo xml with xsl return
+                    return
                 else:
                     return super(PageHandler, self).send_error(status_code, **kwargs)
 

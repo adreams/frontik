@@ -175,7 +175,6 @@ def test_finish_with_401():
         try:
             answer = urllib2.urlopen("http://localhost:{0}/test_app/finish_401/".format(srv_port))
         except Exception as e:
-            print e.__dict__
             assert (e.msg == "Unauthorized" and e.code == 401)
 
 
