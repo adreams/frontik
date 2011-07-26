@@ -171,18 +171,33 @@ def test_error_in_cb():
         assert (xml.text == "4242")
 
 def test_finish_with_401():
+    '''
+    exception with handlers
+    '''
     with frontik_debug.instance() as srv_port:
         try:
             answer = urllib2.urlopen("http://localhost:{0}/test_app/finish_401/".format(srv_port))
         except Exception as e:
-            assert (e.msg == "Unauthorized" and e.code == 401)
+            assert (e.msg == "Unauthorized" and e.code == 401
+                    and e.headers["WWW-Authenticate"] == 'Basic realm="Secure Area"')
 
 
-def test_finish_page_exception_xml():
+def test_exception_text():
+    '''
+    throwing exception with plaintext
+    '''
     with frontik_debug.instance() as srv_port:
-        answer = urllib2.urlopen("http://localhost:{0}/test_app/test_finish_exception".format(srv_port)).read()
-        xml = etree.fromstring(answer)
-        assert (xml.text == "42")
+        answer = urllib2.urlopen("http://localhost:{0}/test_app/test_exception_text".format(srv_port)).read()
+        assert(answer == "This is just a plain text")
+
+def test_exception_xml_xsl():
+    '''
+    throwing exception with xml and xsl
+    '''
+    with frontik_debug.instance() as srv_port:
+        html = urllib2.urlopen("http://localhost:{0}/test_app/test_exception_xml_xsl".format(srv_port)).read()
+        assert (html == "<html><body><h1>ok</h1></body></html>\n")
+
 
 if __name__ == "__main__":
     nose.main()

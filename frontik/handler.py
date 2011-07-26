@@ -46,7 +46,6 @@ def _parse_response_xml(response, logger = log):
                          body_preview)
 
         return etree.Element('error', dict(url = response.effective_url, reason = 'invalid XML'))
-    
     return element
 
 def _parse_response_json(response, logger = log):
@@ -76,7 +75,9 @@ AsyncGroup = frontik.async.AsyncGroup
 
 class HTTPError(tornado.web.HTTPError):
     """An exception that will turn into an HTTP error response."""
-    def __init__(self, status_code, headers = dict(), log_message=None, *args, **kwargs):
+    def __init__(self, status_code, headers = None, log_message=None, *args, **kwargs):
+        if headers is None:
+            headers = {}
         for data in ["text", "xml", "xsl"]:
             setattr(self, data, kwargs.setdefault(data, None))
         self.status_code = status_code
@@ -187,11 +188,9 @@ class PageHandler(tornado.web.RequestHandler):
             self.log.debug('apply_postprocessor==False due to ?nopost query arg')
         else:
             self.apply_postprocessor = True
-        
         self.finish_group = frontik.async.AsyncGroup(self.async_callback(self._finish_page),
                                                      name = 'finish',
                                                      log = self.log.debug)
-        
         self._prepared = True
 
     def require_debug_access(self, login = None, passwd = None):
@@ -216,12 +215,12 @@ class PageHandler(tornado.web.RequestHandler):
 
 
     def get_error_html(self, status_code, **kwargs):
-        if not self._prepared or not self.debug.debug_mode_logging:
-            # *explicitly* use default tornado error page for unprepared
-            # handlers (working handlers count limit for example)
-            return super(PageHandler, self).get_error_html(status_code, **kwargs)
-        else:
+        if  self._prepared and self.debug.debug_mode_logging:
             return self.debug.get_debug_page(status_code, **kwargs)
+        else:
+            #if not prepared (for example, working handlers count limit) or not in
+            #debug mode use default tornado error page
+            return super(PageHandler, self).get_error_html(status_code, **kwargs)
 
 
     def send_error(self, status_code = 500, **kwargs):
@@ -232,18 +231,15 @@ class PageHandler(tornado.web.RequestHandler):
             if status_code == 200:
                 self.finish_page()
             if getattr(exception, "text", None) is not None:
-                #TODO add logic for concrete use case
                 self.text = exception.text
-                return
+                self.finish_page()
             if getattr(exception, "xml", None) is not None:
-                #TODO add logic for concrete use case
                 self.doc.put(exception.xml)
                 if getattr(exception, "xsl", None) is not None:
-                    #TODO add logic for concrete use case
                     self.set_xsl(exception.xsl)
-                    return
+                    self.finish_page()
                 elif self.transform:
-                    return
+                    self.finish_page()
                 else:
                     return super(PageHandler, self).send_error(status_code, **kwargs)
 
@@ -352,7 +348,7 @@ class PageHandler(tornado.web.RequestHandler):
 
         return placeholder
 
-    def get_url_retry(self, url, data = dict(), headers = dict(), retry_count = 3, retry_delay = 0.1, connect_timeout = 0.5, request_timeout = 2, callback = None, request_types = None):
+    def get_url_retry(self, url, data = None, headers = None, retry_count = 3, retry_delay = 0.1, connect_timeout = 0.5, request_timeout = 2, callback = None, request_types = None):
         placeholder = future.Placeholder()
 
         request = frontik.util.make_get_request(url,
@@ -414,7 +410,7 @@ class PageHandler(tornado.web.RequestHandler):
         placeholder = future.Placeholder()
         request = frontik.util.make_put_request(url,
                                                 data,
-                                                {} if headers is None else headers, 
+                                                {} if headers is None else headers,
                                                 connect_timeout,
                                                 request_timeout)
         self.fetch_request(request, partial(self._fetch_request_response, placeholder, callback, request, request_types=request_types))
