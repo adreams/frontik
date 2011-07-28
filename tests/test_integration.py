@@ -187,7 +187,7 @@ def test_exception_text():
     throwing exception with plaintext
     '''
     with frontik_debug.instance() as srv_port:
-        answer = urllib2.urlopen("http://localhost:{0}/test_app/test_exception_text".format(srv_port)).read()
+        answer = urllib2.urlopen("http://localhost:{0}/test_app/test_exception_text/?port={0}".format(srv_port)).read()
         assert(answer == "This is just a plain text")
 
 def test_exception_xml_xsl():

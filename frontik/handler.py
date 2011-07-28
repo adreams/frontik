@@ -188,7 +188,7 @@ class PageHandler(tornado.web.RequestHandler):
             self.log.debug('apply_postprocessor==False due to ?nopost query arg')
         else:
             self.apply_postprocessor = True
-        self.finish_group = frontik.async.AsyncGroup(self.async_callback(self._finish_page),
+        self.finish_group = frontik.async.AsyncGroup(self.async_callback(self._finish_page_cb),
                                                      name = 'finish',
                                                      log = self.log.debug)
         self._prepared = True
@@ -229,17 +229,17 @@ class PageHandler(tornado.web.RequestHandler):
         if exception:
             self.set_status(status_code)
             if status_code == 200:
-                self.finish_page()
+                self._force_finish()
             if getattr(exception, "text", None) is not None:
                 self.text = exception.text
-                self.finish_page()
+                self._force_finish()
             if getattr(exception, "xml", None) is not None:
                 self.doc.put(exception.xml)
                 if getattr(exception, "xsl", None) is not None:
                     self.set_xsl(exception.xsl)
-                    self.finish_page()
+                    self._force_finish()
                 elif self.transform:
-                    self.finish_page()
+                    self._force_finish()
                 else:
                     return super(PageHandler, self).send_error(status_code, **kwargs)
 
@@ -482,7 +482,10 @@ class PageHandler(tornado.web.RequestHandler):
     def finish_page(self):
         self.finish_group.try_finish()
 
-    def _finish_page(self):
+    def _force_finish(self):
+        self.finish_group.finish()
+
+    def _finish_page_cb(self):
         if not self._finished:
             self.log.stage_tag("page")
 
