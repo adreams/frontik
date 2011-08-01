@@ -177,6 +177,7 @@ def test_finish_with_401():
     with frontik_debug.instance() as srv_port:
         try:
             answer = urllib2.urlopen("http://localhost:{0}/test_app/finish_401/".format(srv_port))
+            assert False
         except Exception as e:
             assert (e.msg == "Unauthorized" and e.code == 401
                     and e.headers["WWW-Authenticate"] == 'Basic realm="Secure Area"')

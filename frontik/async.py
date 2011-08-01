@@ -85,6 +85,8 @@ class AsyncGroup(object):
                     intermediate_cb(*args, **kwargs)
                 finally:
                     self.try_finish()
+            else:
+                self.log("Ignoring response because of already finished group")
 
         return new_cb
 

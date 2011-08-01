@@ -223,27 +223,28 @@ class PageHandler(tornado.web.RequestHandler):
             return super(PageHandler, self).get_error_html(status_code, **kwargs)
 
 
-    def send_error(self, status_code = 500, **kwargs):
+    def send_error(self, status_code = 500, headers = None, **kwargs):
+        if headers is None:
+            headers = {}
         exception = kwargs.get("exception", None)
+        need_finish = ((exception is not None) and ((199 < status_code < 400) or
+                        (getattr(exception, "xml", None) or getattr(exception, "text", None))))
 
-        if exception:
+        if need_finish:
             self.set_status(status_code)
-            if status_code == 200:
-                self._force_finish()
+            for (name, value) in headers.iteritems():
+                self.set_header(name, value)
+
             if getattr(exception, "text", None) is not None:
                 self.text = exception.text
-                self._force_finish()
             if getattr(exception, "xml", None) is not None:
                 self.doc.put(exception.xml)
                 if getattr(exception, "xsl", None) is not None:
                     self.set_xsl(exception.xsl)
-                    self._force_finish()
-                elif self.transform:
-                    self._force_finish()
-                else:
-                    return super(PageHandler, self).send_error(status_code, **kwargs)
+            self._force_finish()
 
-        return super(PageHandler, self).send_error(status_code, **kwargs)
+        else:
+            return super(PageHandler, self).send_error(status_code, headers=headers, **kwargs)
 
     @tornado.web.asynchronous
     def post(self, *args, **kw):
