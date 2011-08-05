@@ -190,6 +190,14 @@ def test_finish_with_401():
                     and e.headers["WWW-Authenticate"] == 'Basic realm="Secure Area"')
 
 
+def test_async_memcache_client():
+    '''
+    throwing exception with plaintext
+    '''
+    with frontik_debug.instance() as srv_port:
+        answer = urllib2.urlopen("http://localhost:{0}/test_app/async_memcached/".format(srv_port)).read()
+        assert(answer == "OK")
+
 def test_exception_text():
     '''
     throwing exception with plaintext

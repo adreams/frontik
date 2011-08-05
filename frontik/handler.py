@@ -15,6 +15,7 @@ import tornado.options
 import tornado.web
 import tornado.ioloop
 
+import frontik.adisp as adisp
 import frontik.async
 import frontik.auth
 import frontik.util
@@ -22,6 +23,7 @@ import frontik.handler_xml
 import frontik.handler_whc_limit
 import frontik.handler_xml_debug
 import frontik.future as future
+import frontik.memcache as memcache
 
 import logging
 log = logging.getLogger('frontik.handler')
@@ -177,6 +179,14 @@ class PageHandler(tornado.web.RequestHandler):
         self.finish_group = frontik.async.AsyncGroup(self.async_callback(self._finish_page_cb),
                                                      name = 'finish',
                                                      log = self.log.debug)
+
+        self.memcache = None
+        memcached_hosts = getattr(self.config, "memcached_hosts", None)
+        if memcached_hosts is not None:
+            self.memcache = memcache.AsyncClientPool(self.request_id,
+                                                     memcached_hosts,
+                                                     self.finish_group.add)
+
         self._prepared = True
 
     def require_debug_access(self, login = None, passwd = None):
