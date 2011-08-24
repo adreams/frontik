@@ -16,6 +16,10 @@ def simple_test():
     with frontik_debug.get_page_text("test_app/simple") as html:
         assert(not html.find("ok") is None)
 
+def import_include_test():
+    with frontik_debug.get_page_text("test_app/import_include") as html:
+        assert(not html.find("ok import") is None)
+        assert(not html.find("ok include") is None)
 
 def not_simple_test():
     with frontik_debug.get_page_text("re_app/not_simple") as html:

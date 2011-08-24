@@ -12,14 +12,12 @@ class PageHandlerWHCLimit(object):
         self.acquired = False # init it with false in case of emergency failure
 
         if working_handlers_count <= tornado.options.options.handlers_count:
-            self.handler.log.debug('started %s %s (workers_count = %s)',
-                                   self.handler.request.method,
-                                   self.handler.request.uri,
+            self.handler.log.info('started %s (workers_count = %s)',
+                                   self.handler._request_summary(),
                                    working_handlers_count)
         else:
-            self.handler.log.warn('dropping %s %s; too many workers (%s)',
-                                  self.handler.request.method,
-                                  self.handler.request.uri,
+            self.handler.log.warn('dropping %s; too many workers (%s)',
+                                  self.handler._request_summary(),
                                   working_handlers_count)
             raise tornado.web.HTTPError(503)
 
@@ -36,7 +34,5 @@ class PageHandlerWHCLimit(object):
         if self.acquired:
             global working_handlers_count
             working_handlers_count -= 1
-            
             self.acquired = False
-
             self.handler.log.debug('workers count-1 = %s', working_handlers_count)

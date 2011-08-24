@@ -36,28 +36,21 @@ def _parse_response_smth(response, logger = log, parser=None, type=None):
         else:
             body_preview = response.body
 
-        logger.exception('failed to parse {2} response from {0} Bad data:"{1}"'.format(
-            response.effective_url, body_preview, type))
+        logger.warn('failed to parse {0} response from {1} Bad data:"{2}"'.format(type, response.effective_url, body_preview))
         return (False, etree.Element('error', dict(url = response.effective_url, reason = 'invalid {0}'.format(type))))
 
     return (True, data)
 
-_xml_parser = etree.XMLParser(strip_cdata=False)
-_parse_response_xml =  partial(_parse_response_smth,
-                               parser = lambda x: etree.fromstring(x, parser=_xml_parser),
-                               type = 'XML')
+def _parse_response_xml(response, handler):
+    return _parse_response_smth(response, handler.log, parser = handler.ph_globals.xml.xml_parser, type = 'XML')
 
-_parse_response_json =  partial(_parse_response_smth,
-                               parser = json.loads,
-                               type = 'JSON')
+def _parse_response_json(response, handler):
+    return _parse_response_smth(response, handler.log, parser = json.loads, type = 'JSON')
 
 default_request_types = {
-          re.compile(".*xml.?"): _parse_response_xml,
-          re.compile(".*json.?"): _parse_response_json
+          re.compile(".*xml.?").search: _parse_response_xml,
+          re.compile(".*json.?").search: _parse_response_json
           }
-
-# TODO cleanup this after release of frontik with frontik.async
-AsyncGroup = frontik.async.AsyncGroup
 
 class HTTPError(tornado.web.HTTPError):
     """An exception that will turn into an HTTP error response."""
@@ -424,24 +417,20 @@ class PageHandler(tornado.web.RequestHandler):
     def _fetch_request_response(self, placeholder, callback, request, response, request_types = None):
         self.log.debug('got %s %s in %.2fms', response.code, response.effective_url, response.request_time * 1000, extra = {"response": response, "request": request})
 
+        good_result = False
         if not request_types:
             request_types = default_request_types
-        result = None
         if response.error:
             placeholder.set_data(self.show_response_error(response))
         else:
             content_type = response.headers.get('Content-Type', '')
-            for k, v in request_types.iteritems():
-                if k.search(content_type):
-                    good_result, data = v(response)
-                    if good_result:
-                        result = data
-                    else:
-                        result = None
+            for type_matcher, resp_parser in request_types.iteritems():
+                if type_matcher(content_type):
+                    good_result, data = resp_parser(response, self)
                     placeholder.set_data(data)
                     break
         if callback:
-            callback(result, response)
+                callback(data if good_result else None, response)
 
     def show_response_error(self, response):
         self.log.warn('%s failed %s (%s)', response.code, response.effective_url, str(response.error))

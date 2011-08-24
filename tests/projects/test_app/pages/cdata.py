@@ -1,7 +1,7 @@
 import frontik.handler
 from frontik import etree
 
-CDATA_XML = '<root><![CDATA[test<ba//d>]]></root>'
+CDATA_XML = ('<root><![CDATA[test<ba//d> >><<]]></root>')
 
 class Page(frontik.handler.PageHandler):
     def get_page(self):
@@ -12,7 +12,6 @@ class Page(frontik.handler.PageHandler):
         self.post_url("http://localhost:%stest_app/cdata/" % self.get_argument("port"), "", callback=_cb)
 
     def post_page(self):
-        parser = etree.XMLParser(strip_cdata=False)
-        root = etree.XML(CDATA_XML, parser)
-        self.log.debug(root)
+        root = self.ph_globals.xml.xml_parser(CDATA_XML)
+        self.log.debug(etree.tostring(root))
         self.doc.put(root)

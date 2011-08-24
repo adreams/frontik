@@ -6,7 +6,7 @@ import lxml.etree as etree
 
 
 log = logging.getLogger("frontik.xml_util")
-parser = etree.XMLParser()
+parser = etree.XMLParser(strip_cdata=False)
 
 class PrefixResolver(etree.Resolver):
     def __init__(self, scheme, path):
@@ -28,29 +28,31 @@ def _abs_filename(base_filename, filename):
         base_dir = os.path.dirname(base_filename)
         return os.path.normpath(os.path.join(base_dir, filename))
 
-def _read_xsl_one(filename, log=log, parser=parser):
+def _read_one_xsl(source, log=log, parser=parser):
     """return (etree.ElementTree, xsl_includes)"""
 
-    log.debug("read file %s", filename)
-    tree = etree.parse(filename, parser)
-    xsl_includes = [_abs_filename(filename, i.get("href"))
-                    for i in tree.findall("{http://www.w3.org/1999/XSL/Transform}import")
-                    if i.get("href").find(":") == -1]
+    name = source.name if hasattr(source, 'name') else str(source)
+    log.debug("read file %s", name)
+    tree = etree.parse(source, parser)
+    xsl_includes = [_abs_filename(name, imp.get("href"))
+                    for imp in tree.xpath('xsl:import|xsl:include',namespaces={'xsl':'http://www.w3.org/1999/XSL/Transform'})
+                    if imp.get("href").find(":") == -1]
+    xsl_includes.append(name)
     return tree, xsl_includes
 
-def read_xsl(filename, log=log, parser=parser):
+def read_xsl(source, log=log, parser=parser):
     """return (etree.XSL, xsl_files_watchlist)"""
 
-    xsl_includes = set([filename])
+    xsl_includes = set()
 
-    result, new_xsl_files = _read_xsl_one(filename, log, parser)
+    result, new_xsl_files = _read_one_xsl(source, log, parser)
 
     diff = set(new_xsl_files).difference(xsl_includes)
     while diff:
         new_xsl_files = set()
 
         for i in diff:
-            _, i_files = _read_xsl_one(i, log)
+            _, i_files = _read_one_xsl(i, log)
             xsl_includes.add(i)
             new_xsl_files.update(i_files)
 

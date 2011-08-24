@@ -31,6 +31,7 @@ def response_to_xml(response):
             body = 'Cant show response body, ' + str(e)
     else:
         try:
+            #TODO: use appropriate parser for app
             body = etree.fromstring(response.body)
         except Exception as e:
             body = 'Cant show response body, ' + str(e)

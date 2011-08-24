@@ -33,23 +33,13 @@ def x_urlencode(context, params):
     if params:
         return urllib.quote(params[0].text.encode("utf8") or "")
 
-# TODO cleanup this
-ns = etree.FunctionNamespace('http://www.yandex.ru/xscript')
-ns.prefix = 'x'
-ns['http-header-out'] = http_header_out
-ns['set-http-status'] = set_http_status
-ns['urlencode'] = x_urlencode
-
-
 class FileCache(object):
     def __init__(self, root_dir, load_fn):
         '''
         load_fn :: filename -> (status, result)
         '''
-
         self.root_dir = root_dir
         self.load_fn = load_fn
-
         self.cache = dict()
 
     def load(self, filename):
@@ -58,55 +48,37 @@ class FileCache(object):
             return self.cache[filename]
         else:
             real_filename = os.path.normpath(os.path.join(self.root_dir, filename))
-
             log_fileloader.debug('reading %s file from %s', filename, real_filename)
             ok, ret = self.load_fn(real_filename)
-
         if ok:
             self.cache[filename] = ret
-
         return ret
-
 
 def _source_comment(src):
     return etree.Comment('Source: {0}'.format(frontik.util.asciify_url(src).replace('--', '%2D%2D')))
 
-def xml_from_file(filename):
+def xml_from_file(source, parser=frontik.xml_util.parser):
     ''' 
-    filename -> (status, et.Element)
+    file -> (status, [source_comment, et.Element])
 
-    status == True - результат хороший можно кешировать
-           == False - результат плохой, нужно вернуть, но не кешировать
+    throws exception in case of some errors
     '''
-
-    if os.path.exists(filename):
-        try:
-            res = etree.parse(file(filename)).getroot()
-            tornado.autoreload.watch_file(filename)
-
-            return True, [_source_comment(filename), res]
-        except:
-            log_fileloader.exception('failed to parse %s', filename)
-            return False, etree.Element('error', dict(msg = 'failed to parse file: %s' % (filename,)))
-    else:
-        log_fileloader.error('file not found: %s', filename)
-        return False, etree.Element('error', dict(msg = 'file not found: %s' % (filename,)))
+    res = etree.parse(source, parser=parser).getroot()
+    name = source.name if hasattr(source, 'name') else str(source)
+    tornado.autoreload.watch_file(name)
+    return True, [_source_comment(name), res]
 
 
-def xsl_from_file(filename):
+def xsl_from_file(source, parser=frontik.xml_util.parser):
     '''
-    filename -> (True, et.XSLT)
+    file -> (True, et.XSLT)
     
-    в случае ошибки выкидывает исключение
+    throws exception in case of some errors
     '''
-
-    transform, xsl_files = frontik.xml_util.read_xsl(filename)
-
+    transform, xsl_files = frontik.xml_util.read_xsl(source, parser=parser)
     for xsl_file in xsl_files:
         tornado.autoreload.watch_file(xsl_file)
-
     return True, transform
-
 
 class InvalidOptionCache(object):
     def __init__(self, option):
@@ -115,6 +87,8 @@ class InvalidOptionCache(object):
     def load(self, filename):
         raise Exception('{0} option is undefined'.format(self.option))
 
+def get_loader(loader, preloader = None):
+    return loader if not preloader else lambda to_load: loader(*preloader(to_load))
 
 def make_file_cache(option_name, option_value, fun):
     if option_value:
@@ -122,15 +96,24 @@ def make_file_cache(option_name, option_value, fun):
     else:
         return InvalidOptionCache(option_name)
 
-
 class PageHandlerXMLGlobals(object):
     def __init__(self, config):
         for schema, path in getattr(config, 'XSL_SCHEMAS', {}).items():
             frontik.xml_util.parser.resolvers.add(
                 frontik.xml_util.PrefixResolver(schema, path))
-        self.xml_cache = make_file_cache('XML_root', getattr(config, 'XML_root', None), xml_from_file)
-        self.xsl_cache = make_file_cache('XSL_root', getattr(config, 'XSL_root', None), xsl_from_file)
 
+        xml_root = getattr(config, 'XML_root', None)
+        xml_loader = get_loader(xml_from_file, getattr(config, 'XML_preparser', None))
+        self.xml_cache = make_file_cache('XML_root', xml_root, xml_loader)
+
+        self.xml_parser = get_loader(self._parse, getattr(config, 'XML_preparser', None))
+
+        xsl_root = getattr(config, 'XSL_root', None)
+        xsl_loader = get_loader(xsl_from_file, getattr(config, 'XSL_preparser', None))
+        self.xsl_cache = make_file_cache('XSL_root', xsl_root, xsl_loader)
+
+    def _parse(self, source, parser=frontik.xml_util.parser):
+        return etree.fromstring(source, parser=parser)
 
 class PageHandlerXML(object):
     def __init__(self, handler):
@@ -163,16 +146,14 @@ class PageHandlerXML(object):
 
     def set_xsl(self, filename):
         self.transform_filename = filename
-
         try:
             self.transform = self.xsl_cache.load(filename)
-
         except etree.XMLSyntaxError, error:
             self._set_xsl_log_and_raise('failed parsing XSL file {0} (XML syntax)')
         except etree.XSLTParseError, error:
             self._set_xsl_log_and_raise('failed parsing XSL file {0} (XSL parse error)')
         except:
-            self._set_xsl_log_and_raise('XSL transformation error with file {0}')
+            self._set_xsl_log_and_raise('failed load XSL file {0}')
 
     def _finish_xml(self):
         if self.apply_xsl and self.transform:
@@ -182,10 +163,8 @@ class PageHandlerXML(object):
 
     def _prepare_finish_with_xsl(self):
         self.log.debug('finishing with xsl')
-
         if not self.handler._headers.get("Content-Type", None):
             self.handler.set_header('Content-Type', 'text/html')
-
         try:
             t = time.time()
             result = str(self.transform(self.doc.to_etree_element()))
@@ -202,8 +181,6 @@ class PageHandlerXML(object):
 
     def _prepare_finish_wo_xsl(self):
         self.log.debug('finishing wo xsl')
-
-        # В режиме noxsl мы всегда отдаем xml.
+        # if noxsl mode result is always xml.
         self.handler.set_header('Content-Type', 'application/xml')
-
         return self.doc.to_string()
