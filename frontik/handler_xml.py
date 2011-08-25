@@ -87,8 +87,11 @@ class InvalidOptionCache(object):
     def load(self, filename):
         raise Exception('{0} option is undefined'.format(self.option))
 
+
 def get_loader(loader, preloader = None):
-    return loader if not preloader else lambda to_load: loader(*preloader(to_load))
+    def newloader(to_load):
+        return loader(*(preloader(to_load)))
+    return loader if not preloader else newloader
 
 def make_file_cache(option_name, option_value, fun):
     if option_value:
@@ -106,7 +109,8 @@ class PageHandlerXMLGlobals(object):
         xml_loader = get_loader(xml_from_file, getattr(config, 'XML_preparser', None))
         self.xml_cache = make_file_cache('XML_root', xml_root, xml_loader)
 
-        self.xml_parser = get_loader(self._parse, getattr(config, 'XML_preparser', None))
+        xml_preparser = getattr(config, 'XML_preparser', None)
+        self.xml_parser = get_loader(self._parse, xml_preparser)
 
         xsl_root = getattr(config, 'XSL_root', None)
         xsl_loader = get_loader(xsl_from_file, getattr(config, 'XSL_preparser', None))

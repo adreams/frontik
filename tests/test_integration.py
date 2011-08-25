@@ -33,8 +33,30 @@ def cdata_test():
     with frontik_debug.instance() as srv_port:
         with frontik_debug.get_page_text("test_app/cdata/?port=%s" % srv_port) as html:
             print html
+            assert(html.find("test") is not None)
+            assert(html.find("CDATA") is not None)
+
+def xml_preparse_test():
+    with frontik_debug.instance() as srv_port:
+        with frontik_debug.get_page_text("re_app/xmlpreparse") as html:
+            print html
             assert(not html.find("test") is None)
+            assert(not html.find("test&lt;ba") is None)
             assert(not html.find("CDATA") is None)
+            assert(html.find(">><<") == -1)
+
+        with frontik_debug.get_page_text("re_app/xmlpreparse?postfix=fool") as html:
+            assert(not html.find("new") is None)
+            assert(not html.find("test&lt;ba") is None)
+
+def xsl_preparse_test():
+    with frontik_debug.instance() as srv_port:
+        with frontik_debug.get_page_text("re_app/xslpreparse") as html:
+            #as simple page
+            assert(not html.find("ok") is None)
+
+        with frontik_debug.get_page_text("re_app/xslpreparse?postfix=fool") as html:
+            assert(not html.find("ok") is None)
 
 def url_types_test_1():
     with frontik_debug.instance() as srv_port:
@@ -96,11 +118,9 @@ def test_xsl_fail():
             assert(any(map(lambda x: 'XSLTApplyError' in x, e.readlines())))
             assert(e.code == 500)
 
-
 def test_content_type_wo_xsl():
     with frontik_debug.instance() as srv_port:
         assert(get_page(srv_port, "test_app/simple", xsl=False).headers["content-type"].startswith("application/xml"))
-
 
 def xml_include_test():
     with frontik_debug.get_page_xml("test_app/include_xml") as xml:

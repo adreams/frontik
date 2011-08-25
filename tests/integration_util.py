@@ -11,8 +11,10 @@ import lxml.etree as etree
 import tornado_util.supervisor as supervisor
 
 def get_page(port, page, xsl=False):
-    data = urllib2.urlopen("http://localhost:%s/%s/%s" % (port, page, "?noxsl=true" if not xsl else "" ))
-    
+    url = "http://localhost:{0}/{1}{2}".format(port, page,
+                                               ("/?" if "?" not in page else "&") + ("noxsl=true" if not xsl else ""))
+    data = urllib2.urlopen(url)
+    print url
     return data
 
 
