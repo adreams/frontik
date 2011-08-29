@@ -57,28 +57,29 @@ class FileCache(object):
 def _source_comment(src):
     return etree.Comment('Source: {0}'.format(frontik.util.asciify_url(src).replace('--', '%2D%2D')))
 
+import tornado.options
+
 def xml_from_file(source, parser=frontik.xml_util.parser):
     ''' 
-    file -> (status, [source_comment, et.Element])
+    file -> (True if not debug else False, [source_comment, et.Element])
 
     throws exception in case of some errors
     '''
     res = etree.parse(source, parser=parser).getroot()
     name = source.name if hasattr(source, 'name') else str(source)
     tornado.autoreload.watch_file(name)
-    return True, [_source_comment(name), res]
-
+    return not tornado.options.options.debug, [_source_comment(name), res]
 
 def xsl_from_file(source, parser=frontik.xml_util.parser):
     '''
-    file -> (True, et.XSLT)
+    file -> (True if not debug else False, et.XSLT)
     
     throws exception in case of some errors
     '''
     transform, xsl_files = frontik.xml_util.read_xsl(source, parser=parser)
     for xsl_file in xsl_files:
         tornado.autoreload.watch_file(xsl_file)
-    return True, transform
+    return not tornado.options.options.debug, transform
 
 class InvalidOptionCache(object):
     def __init__(self, option):
