@@ -30,23 +30,19 @@ def _abs_filename(base_filename, filename):
 
 def _read_one_xsl(source, log=log, parser=parser):
     """return (etree.ElementTree, xsl_includes)"""
-
     name = source.name if hasattr(source, 'name') else str(source)
     log.debug("read file %s", name)
     tree = etree.parse(source, parser)
     xsl_includes = [_abs_filename(name, imp.get("href"))
                     for imp in tree.xpath('xsl:import|xsl:include',namespaces={'xsl':'http://www.w3.org/1999/XSL/Transform'})
                     if imp.get("href").find(":") == -1]
-    xsl_includes.append(name)
     return tree, xsl_includes
 
 def read_xsl(source, log=log, parser=parser):
     """return (etree.XSL, xsl_files_watchlist)"""
 
-    xsl_includes = set()
-
+    xsl_includes = {source.name if hasattr(source, 'name') else str(source)}
     result, new_xsl_files = _read_one_xsl(source, log, parser)
-
     diff = set(new_xsl_files).difference(xsl_includes)
     while diff:
         new_xsl_files = set()
@@ -57,5 +53,4 @@ def read_xsl(source, log=log, parser=parser):
             new_xsl_files.update(i_files)
 
         diff = new_xsl_files.difference(xsl_includes)
-
-    return (etree.XSLT(result), xsl_includes)
+    return etree.XSLT(result), xsl_includes

@@ -36,27 +36,16 @@ def cdata_test():
             assert(html.find("test") is not None)
             assert(html.find("CDATA") is not None)
 
-def xml_preparse_test():
-    with frontik_debug.instance() as srv_port:
-        with frontik_debug.get_page_text("re_app/xmlpreparse") as html:
-            print html
-            assert(not html.find("test") is None)
-            assert(not html.find("test&lt;ba") is None)
-            assert(not html.find("CDATA") is None)
-            assert(html.find(">><<") == -1)
-
-        with frontik_debug.get_page_text("re_app/xmlpreparse?postfix=fool") as html:
-            assert(not html.find("new") is None)
-            assert(not html.find("test&lt;ba") is None)
-
 def xsl_preparse_test():
     with frontik_debug.instance() as srv_port:
         with frontik_debug.get_page_text("re_app/xslpreparse") as html:
             #as simple page
             assert(not html.find("ok") is None)
-
-        with frontik_debug.get_page_text("re_app/xslpreparse?postfix=fool") as html:
-            assert(not html.find("ok") is None)
+        with frontik_debug.get_page_text("re_app/xslpreparse?postfix=1/fool") as html:
+            assert(not html.find("ok 1") is None)
+            assert(not html.find("ok global") is None)
+        with frontik_debug.get_page_text("re_app/xslpreparse?postfix=2/fool") as html:
+            assert(not html.find("ok global") is None)
 
 def url_types_test_1():
     with frontik_debug.instance() as srv_port:

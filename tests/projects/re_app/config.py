@@ -4,31 +4,24 @@ XSL_root = os.path.normpath(os.path.join(os.path.dirname(__file__), "xsl"))
 XML_root = os.path.normpath(os.path.join(os.path.dirname(__file__), "xml" ))
 apply_xsl = True
 
-def post(self, data, cb):
-    self.log.debug('posprocessor called')
-    cb(data)
-    
-postprocessor = post
-
-
-import StringIO
-class MyXString(StringIO.StringIO):
-    def __init__(self, buf = '', fake_name='generated x'):
-        self.fake_name = fake_name
-        StringIO.StringIO.__init__(self, buf)
+class Post(object):
+    def __call__(self, handler, data, cb):
+        handler.log.debug('posprocessor called')
+        cb(data)
     def __repr__(self):
-        return "'{0}'".format(self.fake_name)
-from lxml import etree
-parser = etree.XMLParser()
-def XML_preparser(filename):
-    if 'fool' in filename:
-        res = MyXString("<fool/>", 'new on-the-go fake {0}'.format(filename))
-        return res, parser
-    return filename, parser
+        return "re_app Post"
+postprocessor = Post()
 
+import lxml.etree
+parser = lxml.etree.XMLParser()
+class XFile(file):
+    name = property(lambda self: self.viewable_name)
+    def __init__(self, name, *args, **kwargs):
+        self.viewable_name = name + " (fake)"
+        file.__init__(self, os.path.join(XSL_root,'1/base.xsl'), *args, **kwargs)
 def XSL_preparser(filename):
-    if 'fool' in filename:
-        return filename.replace('fool', 'simple'), parser
+    if not os.path.exists(filename):
+        return (XFile(filename)), parser
     return filename, parser
 
 from frontik.app import Map2ModuleName
