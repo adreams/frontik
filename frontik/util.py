@@ -8,6 +8,8 @@ from urllib import urlencode
 
 import tornado.httpclient
 
+import pycurl
+
 def list_unique(l):
     return list(set(l))
 
@@ -129,6 +131,9 @@ def make_get_request(url, data=None, headers=None,
                     request_timeout=request_timeout)
 
 
+def set_tcp_nodelay_cb(curl):
+    curl.setopt(pycurl.TCP_NODELAY, 1)
+
 def make_post_request(url, data='', headers=None, files=None,
         connect_timeout=0.5, request_timeout=2, follow_redirects=True, content_type=None):
 
@@ -151,7 +156,8 @@ def make_post_request(url, data='', headers=None, files=None,
                 url=_encode(url),
                 body=body,
                 connect_timeout=connect_timeout,
-                request_timeout=request_timeout)
+                request_timeout=request_timeout,
+                prepare_curl_callback=set_tcp_nodelay_cb)
 
 def make_put_request(url, data='', headers=None, connect_timeout=0.5, request_timeout=2):
     return tornado.httpclient.HTTPRequest(
