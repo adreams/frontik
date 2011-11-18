@@ -1,3 +1,9 @@
+frontik (2.9.8~tcpnodelay) unstable; urgency=low
+
+  * HH-23428 tcp_nodelay option for POST requests 
+
+ -- Georgiy Danschin <g.danschin@hh.ru>  Fri, 18 Nov 2011 14:38:20 +0400
+
 frontik (2.9.8) unstable; urgency=low
 
   * HH-21519 fixed double stack trace fro xslt in error log
