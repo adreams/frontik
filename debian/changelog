@@ -1,8 +1,8 @@
-frontik (2.10.0~dev) karmic; urgency=low
+frontik (2.11.0~dev) unstable; urgency=low
 
-  * 
+  * long test adapted for timeouts less than second
 
- -- Vasily Katraev <v.katraev@hh.ru>  Tue, 15 Nov 2011 14:29:59 +0300
+ -- Pavel Trukhanov <p.trukhanov@hh.ru>  Sun, 20 Nov 2011 13:55:59 +0300
 
 frontik (2.10.0) unstable; urgency=low
 
