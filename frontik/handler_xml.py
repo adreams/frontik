@@ -210,13 +210,13 @@ class PageHandlerXML(object):
             self.log.stage_tag("xsl")
             self.log.debug('applied XSL %s in %.2fms', self.transform_filename, (time.time() - t)*1000)
             if len(self.transform.error_log):
-                self.log.debug('xsl messages: %s' % " ".join(map("message: {0.message}".format, self.transform.error_log)))
+                map(self.log.info, (map("xsl message: {0.message}".format, self.transform.error_log)))
             return result
         except:
-            self.log.exception('failed transformation with XSL %s' % self.transform_filename)
-            self.log.exception('error_log entries: %s' % "\n".join(map("message from line: {0.line}, column: {0.column}, \
-            domain: {0.domain_name}, type: {0.type_name}\
-            level: {0.level_name}, file : {0.filename}, message: {0.message}".format, self.transform.error_log)))
+            self.log.error('failed transformation with XSL %s', self.transform_filename)
+            self.log.error('XSL error log entries:\n%s' % "\n".join(map(
+                'File "{0.filename}", line {0.line}, column {0.column}\n\t{0.message}'
+                .format, self.transform.error_log)))
             raise
 
     def _prepare_finish_wo_xsl(self):
