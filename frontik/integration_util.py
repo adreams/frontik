@@ -7,6 +7,7 @@ import httplib
 import socket
 import subprocess
 import lxml.etree as etree
+import os.path
 
 import tornado_util.supervisor as supervisor
 import tornado.options
@@ -20,11 +21,12 @@ def get_page(port, page, xsl=False):
 
 
 class FrontikTestInstance(object):
-    def __init__(self, cfg="./tests/projects/frontik.cfg"):
+    def __init__(self, cfg="./tests/projects/frontik.cfg", dev_run = None):
         self.cfg = cfg
         tornado.options.parse_config_file(self.cfg)
         self.port = None
         self.supervisor = supervisor
+        self.dev_run = dev_run
 
     def start(self):
         for port in xrange(9000, 10000):
@@ -37,8 +39,9 @@ class FrontikTestInstance(object):
                 pass
         else:
             raise AssertionError("no empty port in 9000-10000 for frontik test instance")
+        print __package__
 
-        supervisor.start_worker("./dev_run.py", self.cfg, port)
+        supervisor.start_worker(self.dev_run or "./dev_run.py", self.cfg, port)
         self.wait_for(lambda: supervisor.is_running(port))
         self.port = port
 
