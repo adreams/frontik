@@ -5,7 +5,7 @@ from __future__ import with_statement
 import nose
 import urllib2
 
-from integration_util import FrontikTestInstance
+from frontik.integration_util import FrontikTestInstance
 
 frontik_prod = FrontikTestInstance("./tests/projects/frontik_non_debug_mode.cfg")
 

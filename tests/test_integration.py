@@ -7,7 +7,7 @@ import lxml.etree as etree
 import nose
 import frontik.handler
 
-from integration_util import get_page, FrontikTestInstance
+from frontik.integration_util import get_page, FrontikTestInstance
 
 frontik_debug = FrontikTestInstance("./tests/projects/frontik.cfg")
 
