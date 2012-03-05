@@ -334,6 +334,7 @@ class PageHandler(tornado.web.RequestHandler):
             self.log.warn('attempted to make http request to %s while page is already finished; ignoring', req.url)
 
     def get_url(self, url, data = None, headers = None, connect_timeout = 0.5, request_timeout = 2, callback = None, follow_redirects = True, request_types = None):
+        print frontik.handler.PageHandler.fetch_request
         placeholder = future.Placeholder()
         request = frontik.util.make_get_request(url,
                                                 {} if data is None else data,
