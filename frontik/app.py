@@ -1,6 +1,5 @@
 import imp
 import logging
-import os.path
 import sys
 import re
 
@@ -12,9 +11,6 @@ from tornado.options import options
 
 import frontik.magic_imp
 import frontik.doc
-from frontik import __version__
-from frontik import etree
-from tornado.httpserver import HTTPRequest
 import urlparse
 
 
@@ -189,7 +185,6 @@ class App(object):
             #module to reload in case of change
             for filename in self.importer.get_probable_module_filenames('config'):
                 tornado.autoreload.watch_file(filename)
-
             self.ph_globals = frontik.handler.PageHandlerGlobals(self.module)
         except:
             #we do not want to break frontik on app

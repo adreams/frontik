@@ -21,23 +21,18 @@ class MockHttpClient(object):
         super(MockHttpClient, self).__init__(*arg, **kwarg)
     def fetch_request(self, req, callback):
         raise RuntimeError('set http_fetch_intercept by subclassing/'+\
-                           'augmenting MockHttpClient and passing it to TestApp')
+                           'augmenting MockHttpClient and passing it to MockTestApp')
 
-global ph_globals
-ph_globals = None
-
-class TestApp(App):
+class MockTestApp(App):
     def __init__(self, *arg, **kwarg):
-        # hack here to workaround lazy init TestApp w/o touching App class
+        # hack here to workaround lazy init MockTestApp w/o touching App class
         self.mock_http_client = kwarg.pop('mock_http_client')
-        super(TestApp, self).__init__(*arg, **kwarg)
+        super(MockTestApp, self).__init__(*arg, **kwarg)
 
     def _initialize(self):
         # continues here
-        global ph_globals
-        result = super(TestApp, self)._initialize()
+        result = super(MockTestApp, self)._initialize()
         self.ph_globals.http_client = self.mock_http_client
-        ph_globals = self.ph_globals
         return result
 
     def get_test_handler(self):
@@ -54,8 +49,7 @@ def simple_main(port, cfg, mock_http_client, ioloop=True):
     #options['port'].set(port)
     tornado.options.parse_config_file(cfg)
     tornado.options.process_options()
-    app_factory = partial(TestApp, mock_http_client=mock_http_client)
-    print 'app_factory', app_factory
+    app_factory = partial(MockTestApp, mock_http_client=mock_http_client)
     app = frontik.app.get_app(options.urls, 
                               options.apps, 
                               app_factory = app_factory)

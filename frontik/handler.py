@@ -155,7 +155,6 @@ class PageHandler(tornado.web.RequestHandler):
         self.ph_globals = ph_globals
         self.config = self.ph_globals.config
         self.http_client = self.ph_globals.http_client
-
         self.debug_access = None
 
         self.text = None
@@ -326,7 +325,6 @@ class PageHandler(tornado.web.RequestHandler):
             req.headers['X-Request-Id'] = self.request_id
             req.connect_timeout *= tornado.options.options.timeout_multiplier
             req.request_timeout *= tornado.options.options.timeout_multiplier
-
             return self.http_client.fetch(
                     req,
                     self.finish_group.add(self.async_callback(callback)))
@@ -334,7 +332,6 @@ class PageHandler(tornado.web.RequestHandler):
             self.log.warn('attempted to make http request to %s while page is already finished; ignoring', req.url)
 
     def get_url(self, url, data = None, headers = None, connect_timeout = 0.5, request_timeout = 2, callback = None, follow_redirects = True, request_types = None):
-        print frontik.handler.PageHandler.fetch_request
         placeholder = future.Placeholder()
         request = frontik.util.make_get_request(url,
                                                 {} if data is None else data,
@@ -434,7 +431,6 @@ class PageHandler(tornado.web.RequestHandler):
 
     def _fetch_request_response(self, placeholder, callback, request, response, request_types = None):
         self.log.debug('got %s %s in %.2fms', response.code, response.effective_url, response.request_time * 1000, extra = {"response": response, "request": request})
-
         if not request_types:
             request_types = default_request_types
         result = None
