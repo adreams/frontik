@@ -8,35 +8,66 @@ import lxml.etree as etree
 
 import tornado_util.supervisor as supervisor
 import tornado.options
+from frontik.app import App
 
+from functools import partial
+from tornado.options import options
+import frontik.app
+import tornado.httpserver
+import tornado.ioloop
 
-def simple_main(port, cfg):
-    from tornado.options import options
-    import frontik.app
+class MockHttpClient(object):
+    def __init__(self, *arg, **kwarg):
+        super(MockHttpClient, self).__init__(*arg, **kwarg)
+    def fetch_request(self, req, callback):
+        raise RuntimeError('set http_fetch_intercept by subclassing/'+\
+                           'augmenting MockHttpClient and passing it to TestApp')
+
+global ph_globals
+ph_globals = None
+
+class TestApp(App):
+    def __init__(self, *arg, **kwarg):
+        # hack here to workaround lazy init TestApp w/o touching App class
+        self.mock_http_client = kwarg.pop('mock_http_client')
+        super(TestApp, self).__init__(*arg, **kwarg)
+
+    def _initialize(self):
+        # continues here
+        global ph_globals
+        result = super(TestApp, self)._initialize()
+        self.ph_globals.http_client = self.mock_http_client
+        ph_globals = self.ph_globals
+        return result
+
+    def get_test_handler(self):
+        return 
+
+def simple_main(port, cfg, mock_http_client, ioloop=True):
     import frontik.options
 
-    import tornado.httpserver
-    import tornado.ioloop
-
-    tornado.options.define('host', '0.0.0.0', str)
+    #tornado.options.define('host', '0.0.0.0', str)
     #tornado.options.define('port', '0', int)
-    tornado.options.define('daemonize', False, bool)
-    tornado.options.define('autoreload', False, bool)
-    options['host'].set('0.0.0.0')
-    options['port'].set(port)
+    #tornado.options.define('daemonize', False, bool)
+    #tornado.options.define('autoreload', False, bool)
+    #options['host'].set('0.0.0.0')
+    #options['port'].set(port)
     tornado.options.parse_config_file(cfg)
     tornado.options.process_options()
+    app_factory = partial(TestApp, mock_http_client=mock_http_client)
+    print 'app_factory', app_factory
+    app = frontik.app.get_app(options.urls, 
+                              options.apps, 
+                              app_factory = app_factory)
 
-    app = frontik.app.get_app(options.urls, options.apps)
-
-
-    http_server = tornado.httpserver.HTTPServer(app)
+    if ioloop:
+        http_server = tornado.httpserver.HTTPServer(app)
+        http_server.listen(options.port, options.host)
+        io_loop = tornado.ioloop.IOLoop.instance()
+        io_loop.start()
+    else:
+        return app
     
-    http_server.listen(options.port, options.host)
-
-    io_loop = tornado.ioloop.IOLoop.instance()
-    io_loop.start()
-
 def get_page(port, page, xsl=False):
     url = "http://localhost:{0}/{1}{2}".format(port, page,
                                                ("/?" if "?" not in page else "&") + ("noxsl=true" if not xsl else ""))
@@ -57,13 +88,14 @@ def try_open_port():
     return port
 
 class FrontikTestInstance(object):
-    def __init__(self, cfg="./tests/projects/frontik.cfg", dev_run = None, threaded = False):
+    def __init__(self, cfg="./tests/projects/frontik.cfg", dev_run = None, threaded = False, ioloop=True):
         self.cfg = cfg
         tornado.options.parse_config_file(self.cfg)
         self.port = None
         self.supervisor = supervisor
         self.dev_run = dev_run
         self.threaded = threaded
+        self.ioloop = ioloop
 
     def start(self):
         port = try_open_port()
@@ -72,11 +104,10 @@ class FrontikTestInstance(object):
         self.port = port
 
     def start_threaded(self,):
-        import threading
-        port = try_open_port()
         def run():
             simple_main(port, self.cfg)
-
+        import threading
+        port = try_open_port()
         frontik_server_tread = threading.Thread(target = run, )
         frontik_server_tread.daemon = True
         frontik_server_tread.start()
@@ -85,7 +116,6 @@ class FrontikTestInstance(object):
         self.port = port
 
     def __del__(self):
-        print '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! __del__'
         self.supervisor.stop_worker(self.port)
         self.wait_for(lambda: not(self.supervisor.is_running(self.port)))
         if self.frontik_server_tread:
@@ -135,35 +165,3 @@ class FrontikTestInstance(object):
         with self.instance() as srv_port:
             data = get_page(srv_port, page_name, xsl).read()
             yield data
-
-global http_fetch_intercept
-def http_fetch_intercept(self, req, callback):
-    raise RuntimeError('set http_fetch_intercept by subclassing InterceptHttpFetchTestCase')
-
-def patch_frontik_fetch_request():
-    import frontik.handler
-    global http_fetch_intercept
-    def fetch_request(handler, req, callback):
-        return http_fetch_intercept(handler, req, callback)
-    frontik.handler.PageHandler.fetch_request = fetch_request
-    return http_fetch_intercept
-
-import unittest
-
-class InterceptHttpFetchTestCase(unittest.TestCase):
-    def setUp(self):
-        global http_fetch_intercept
-        http_fetch_intercept = self.http_fetch_intercept
-    def tearDown(self):
-        pass
-
-    def http_fetch_intercept(self, handler, req, callback):
-        raise NotImplementedError()
-
-class StackCallbackTestCase(InterceptHttpFetchTestCase):
-    def setUp(self):
-        self.callback_heap = []
-        super(StackCallbackTestCase, self).setUp()
-
-    def http_fetch_intercept(self, handler, req, callback):
-        self.callback_heap.append((handler, req, callback))
