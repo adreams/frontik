@@ -41,12 +41,6 @@ class MockTestApp(App):
 def simple_main(port, cfg, mock_http_client, ioloop=True):
     import frontik.options
 
-    #tornado.options.define('host', '0.0.0.0', str)
-    #tornado.options.define('port', '0', int)
-    #tornado.options.define('daemonize', False, bool)
-    #tornado.options.define('autoreload', False, bool)
-    #options['host'].set('0.0.0.0')
-    #options['port'].set(port)
     tornado.options.parse_config_file(cfg)
     tornado.options.process_options()
     app_factory = partial(MockTestApp, mock_http_client=mock_http_client)
