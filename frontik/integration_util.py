@@ -13,8 +13,6 @@ from frontik.app import App
 from functools import partial
 from tornado.options import options
 import frontik.app
-import tornado.httpserver
-import tornado.ioloop
 
 class MockHttpClient(object):
     def __init__(self, *arg, **kwarg):
@@ -47,15 +45,8 @@ def simple_main(port, cfg, mock_http_client, ioloop=True):
     app = frontik.app.get_app(options.urls, 
                               options.apps, 
                               app_factory = app_factory)
+    return app
 
-    if ioloop:
-        http_server = tornado.httpserver.HTTPServer(app)
-        http_server.listen(options.port, options.host)
-        io_loop = tornado.ioloop.IOLoop.instance()
-        io_loop.start()
-    else:
-        return app
-    
 def get_page(port, page, xsl=False):
     url = "http://localhost:{0}/{1}{2}".format(port, page,
                                                ("/?" if "?" not in page else "&") + ("noxsl=true" if not xsl else ""))
@@ -76,31 +67,17 @@ def try_open_port():
     return port
 
 class FrontikTestInstance(object):
-    def __init__(self, cfg="./tests/projects/frontik.cfg", dev_run = None, threaded = False, ioloop=True):
+    def __init__(self, cfg="./tests/projects/frontik.cfg", dev_run = None):
         self.cfg = cfg
         tornado.options.parse_config_file(self.cfg)
         self.port = None
         self.supervisor = supervisor
         self.dev_run = dev_run
-        self.threaded = threaded
-        self.ioloop = ioloop
 
     def start(self):
         port = try_open_port()
         supervisor.start_worker("./dev_run.py", self.cfg, port)
         self.wait_for(lambda: supervisor.is_running(port))
-        self.port = port
-
-    def start_threaded(self,):
-        def run():
-            simple_main(port, self.cfg)
-        import threading
-        port = try_open_port()
-        frontik_server_tread = threading.Thread(target = run, )
-        frontik_server_tread.daemon = True
-        frontik_server_tread.start()
-        self.wait_for(lambda: supervisor.is_running(port))
-        self.frontik_server_tread = frontik_server_tread
         self.port = port
 
     def __del__(self):
@@ -121,10 +98,7 @@ class FrontikTestInstance(object):
     @contextlib.contextmanager
     def instance(self):
         if not self.port:
-            if self.threaded:
-                self.start_threaded()
-            else:
-                self.start()
+            self.start()
         try:
             yield self.port
         finally:
