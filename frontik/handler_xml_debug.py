@@ -139,13 +139,13 @@ class DebugPageHandler(logging.Handler):
         entry = etree.Element("entry", **entry_attrs)
         entry.set("asctime", str(datetime.fromtimestamp(record.created)))
 
-        if getattr(record, "response", False):
+        if getattr(record, "response", None) is not None:
             entry.append(response_to_xml(record.response))
 
-        if getattr(record, "request", False):
+        if getattr(record, "request", None) is not None:
             entry.append(request_to_xml(record.request))
 
-        if getattr(record, "xml", False):
+        if getattr(record, "xml", None) is not None:
             xml = etree.Element("xml")
             entry.append(xml)
             # make deepcopy
