@@ -176,8 +176,8 @@ class PageHandler(tornado.web.RequestHandler):
         else:
             self.apply_postprocessor = True
         self.finish_group = frontik.async.AsyncGroup(self.async_callback(self._finish_page_cb),
-                                                     name = 'finish',
-                                                     log = self.log.debug)
+                                                    self.log.debug,
+                                                    'finish')
         self._prepared = True
 
     def require_debug_access(self, login = None, passwd = None):

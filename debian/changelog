@@ -10,7 +10,10 @@ frontik (2.12.0~dev) unstable; urgency=low
   [ Mikhail Sabourenkov ]
   * log size of received data
 
- -- Mikhail Sabourenkov <m.saburenkov@hh.ru>  Thu, 22 Mar 2012 16:20:23 +0400
+  [ Pavel Trukhanov ]
+  * AsyncGroup strictly with name and log
+
+ -- Pavel Trukhanov <p.trukhanov@hh.ru>  Tue, 03 Apr 2012 21:25:09 +0400
 
 frontik (2.11.0) unstable; urgency=low
 

@@ -31,7 +31,7 @@ class AsyncGroup(object):
 
     # in the breaking compatibility version parameters should be
     # rearranged: name, finish_cb, log
-    def __init__(self, finish_cb, log=log.debug, name=None):
+    def __init__(self, finish_cb, log, name):
         self.counter = 0
         self.finished = False
         self.finish_cb = finish_cb
