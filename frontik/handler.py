@@ -282,7 +282,7 @@ class PageHandler(tornado.web.RequestHandler):
     def get_page(self):
         ''' Эта функция должна быть переопределена в наследнике и
         выполнять актуальную работу хендлера '''
-        raise HTTPError(405, header={"Allow": "POST"})
+        raise HTTPError(405, headers={"Allow": "POST"})
 
     def post_page(self):
         ''' Эта функция должна быть переопределена в наследнике и
