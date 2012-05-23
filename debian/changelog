@@ -1,3 +1,9 @@
+frontik (2.11.3) unstable; urgency=low
+
+  * fix error in need_finish condition 
+
+ -- Georgiy Danschin <g.danschin@hh.ru>  Thu, 17 May 2012 15:43:42 +0400
+
 frontik (2.11.2) unstable; urgency=low
 
   * allow header typo
