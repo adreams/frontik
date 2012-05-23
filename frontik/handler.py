@@ -76,6 +76,7 @@ class Stats(object):
     def __init__(self):
         self.page_count = 0
         self.http_reqs_count = 0
+        self.http_reqs_size_sum = 0
 
     def next_request_id(self):
         self.page_count += 1
@@ -83,27 +84,21 @@ class Stats(object):
 
 stats = Stats()
 
-class PageLogger(logging.Logger):
-    '''
-    This class is supposed to fix huge memory 'leak' in logging
-    module. I.e. every call to logging.getLogger(some_unique_name)
-    wastes memory as resulting logger is memoized by
-    module. PageHandler used to create unique logger on each request
-    by call logging.getLogger('frontik.handler.%s' %
-    (self.request_id,)). This lead to wasting about 10Mb per 10K
-    requests.
-    '''
+class ContextFilter(logging.Filter):
+    def filter(self, record):
+        record.name = '.'.join(filter(None, [record.name, getattr(record, 'request_id', None)]))
+        return True
+log.addFilter(ContextFilter())
 
-    def __init__(self, name, page, zero_time):
-        logging.Logger.__init__(self, 'frontik.handler.{0}'.format(name))
-        self.page = page
+class PageLogger(logging.LoggerAdapter):
+    def __init__(self, logger_name, page, handler_name, zero_time):
+        logging.LoggerAdapter.__init__(self, log, dict(request_id = logger_name, page = page, handler = handler_name))
         self._time = zero_time
         self.stages = []
-
-
-    def handle(self, record):
-        logging.Logger.handle(self, record)
-        log.handle(record)
+        self.page = page
+        #backcompatibility with logger
+        self.warn = self.warning
+        self.addHandler = self.logger.addHandler
 
     def stage_tag(self, stage):
         self._stage_tag(stage, (time.time() - self._time) * 1000)
@@ -118,6 +113,13 @@ class PageLogger(logging.Logger):
 
     def process_stages(self):
         self.debug("Stages for {0} : ".format(self.page) + " ".join(["{0}:{1:.2f}ms".format(k, v) for k, v in self.stages]))
+
+    def process(self, msg, kwargs):
+        if "extra" in kwargs:
+            kwargs["extra"].update(self.extra)
+        else :
+            kwargs["extra"] = self.extra
+        return msg, kwargs
 
 
 class PageHandlerGlobals(object):
@@ -144,12 +146,10 @@ class PageHandler(tornado.web.RequestHandler):
             raise Exception("%s need to have ph_globals" % PageHandler)
 
         self.name = self.__class__.__name__
-        self.request_id = request.headers.get('X-Request-Id', stats.next_request_id())
-        if hasattr(ph_globals.config, 'app_name') and ph_globals.config.app_name:
-            handler_name = '{0}.{1}'.format(ph_globals.config.app_name, self.request_id)
-        else:
-            handler_name = self.request_id
-        self.log = PageLogger(handler_name, request.path or request.uri, self.handler_started,)
+        self.request_id = request.headers.get('X-Request-Id', str(stats.next_request_id()))
+        logger_name = '.'.join(filter(None, [self.request_id, getattr(ph_globals.config, 'app_name', None)]))
+        self.log = PageLogger(logger_name, request.path or request.uri, self.__module__, self.handler_started)
+
         tornado.web.RequestHandler.__init__(self, application, request, logger = self.log, **kwargs)
 
         self.ph_globals = ph_globals
@@ -207,13 +207,12 @@ class PageHandler(tornado.web.RequestHandler):
             #debug mode use default tornado error page
             return super(PageHandler, self).get_error_html(status_code, **kwargs)
 
-
     def send_error(self, status_code = 500, headers = None, **kwargs):
         if headers is None:
             headers = {}
         exception = kwargs.get("exception", None)
-        need_finish = ((exception is not None) and ((199 < status_code < 400) or
-                        (getattr(exception, "xml", None) or getattr(exception, "text", None))))
+        need_finish = exception is not None and (199 < status_code < 400 or
+                        not(getattr(exception, "xml", None) is None and getattr(exception, "text", None) is None))
 
         if need_finish:
             self.set_status(status_code)
@@ -269,6 +268,7 @@ class PageHandler(tornado.web.RequestHandler):
         # and use debug log instead
         if hasattr(self, 'debug') and self.debug.debug_mode:
             self.set_header('Content-Type', 'text/html')
+            self._finish_chunk_size = len(chunk) if chunk is not None else 0
             res = self.debug.get_debug_page(self._status_code)
             self._status_code = 200
         else:
@@ -321,13 +321,20 @@ class PageHandler(tornado.web.RequestHandler):
     def fetch_request(self, req, callback):
         if not self._finished:
             stats.http_reqs_count += 1
+            def _callback(response):
+                try:
+                    stats.http_reqs_size_sum += len(response.body)
+                except TypeError:
+                    if response.body is not None:
+                        self.log.warn('got strange response.body of type %s', type(response.body))
+                callback(response)
 
             req.headers['X-Request-Id'] = self.request_id
             req.connect_timeout *= tornado.options.options.timeout_multiplier
             req.request_timeout *= tornado.options.options.timeout_multiplier
             return self.http_client.fetch(
                     req,
-                    self.finish_group.add(self.async_callback(callback)))
+                    self.finish_group.add(self.async_callback(_callback)))
         else:
             self.log.warn('attempted to make http request to %s while page is already finished; ignoring', req.url)
 
@@ -430,7 +437,16 @@ class PageHandler(tornado.web.RequestHandler):
         return placeholder
 
     def _fetch_request_response(self, placeholder, callback, request, response, request_types = None):
-        self.log.debug('got %s %s in %.2fms', response.code, response.effective_url, response.request_time * 1000, extra = {"response": response, "request": request})
+        self.log.debug(
+            'got {code}{size} {url} in {time:.2f}ms'.format(
+                code=response.code,
+                url=response.effective_url,
+                size=' {0:e} bytes'.format(len(response.body)) if response.body is not None else '',
+                time=response.request_time * 1000
+            ),
+            extra = {"response": response, "request": request}
+        )
+
         if not request_types:
             request_types = default_request_types
         result = None

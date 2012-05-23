@@ -24,8 +24,10 @@
             <body>
                 <div class="textentry m-textentry_title">
                     requestid: <xsl:value-of select="@request-id"/>,
-                    status:
-                    <xsl:value-of select="@code"/>
+                    status: <xsl:value-of select="@code"/>,
+                    requests: <xsl:value-of select="count(entry/response)"/>,
+                    bytes received: <xsl:value-of select="sum(entry/response/size)"/>,
+                    bytes produced: <xsl:value-of select="@response-size"/>
                 </div>
                 <xsl:apply-templates select="entry"/>
             </body>
@@ -40,10 +42,14 @@
             <xsl:if test="$highlight-text != '' and contains(@msg, $highlight-text)">m-textentry__head_highlight</xsl:if>
         </xsl:variable>
 
+        <xsl:variable name="loglevel">
+            <xsl:value-of select="@levelname"/>
+        </xsl:variable>
+
         <div class="textentry">
-            <pre class="textentry__head {$highlight}">
+            <pre class="textentry__head {$highlight} {$loglevel}">
                 <span title="{@msg}">
-                    <xsl:value-of select="@msg"/>
+                    <xsl:value-of select="concat($loglevel,' ',@msg)"/>
                 </span>
             </pre>
             <xsl:apply-templates select="@exc_text"/>
@@ -79,6 +85,8 @@
                     <xsl:text> </xsl:text>
                     <xsl:value-of select="request/method"/>
                     <xsl:text> </xsl:text>
+                    <xsl:value-of select="format-number(response/size div 1024, '0.#')"/>
+                    <xsl:text>Kb </xsl:text>
                     <xsl:value-of select="request/url"/>
                 </span>
             </div>
@@ -287,6 +295,18 @@
             }
             .error{
                 color:red;
+            }
+            .ERROR{
+                color:#c00;
+            }
+            .WARNING{
+                color:#E80;
+            }
+            .INFO{
+                color:#060;
+            }
+            .DEBUG{
+                color:#00B;
             }
             .delimeter{
                 margin-top:10px;
