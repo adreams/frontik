@@ -139,19 +139,19 @@ class DebugPageHandler(logging.Handler):
         entry = etree.Element("entry", **entry_attrs)
         entry.set("asctime", str(datetime.fromtimestamp(record.created)))
 
-        if getattr(record, "response", False):
-            entry.append(response_to_xml(record.response))
+        if getattr(record, "_response", None) is not None:
+            entry.append(response_to_xml(record._response))
 
-        if getattr(record, "request", False):
-            entry.append(request_to_xml(record.request))
+        if getattr(record, "_request", None) is not None:
+            entry.append(request_to_xml(record._request))
 
-        if getattr(record, "xml", False):
+        if getattr(record, "_xml", None) is not None:
             xml = etree.Element("xml")
             entry.append(xml)
             # make deepcopy
             # if node was sent to debug, but later was appended in some other place
             # etree will move node from this place to new one
-            xml.append(copy.deepcopy(record.xml))
+            xml.append(copy.deepcopy(record._xml))
 
         self.log_data.append(entry)
 

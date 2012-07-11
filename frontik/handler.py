@@ -77,6 +77,7 @@ class Stats(object):
         self.page_count = 0
         self.http_reqs_count = 0
         self.http_reqs_size_sum = 0
+        self.start_time = time.time()
 
     def next_request_id(self):
         self.page_count += 1
@@ -90,9 +91,16 @@ class ContextFilter(logging.Filter):
         return True
 log.addFilter(ContextFilter())
 
+
 class PageLogger(logging.LoggerAdapter):
     def __init__(self, logger_name, page, handler_name, zero_time):
-        logging.LoggerAdapter.__init__(self, log, dict(request_id = logger_name, page = page, handler = handler_name))
+
+        class Logger4Adapter(logging.Logger):
+            def handle(self, record):
+                logging.Logger.handle(self, record)
+                log.handle(record)
+
+        logging.LoggerAdapter.__init__(self, Logger4Adapter('frontik.handler'), dict(request_id = logger_name, page = page, handler = handler_name))
         self._time = zero_time
         self.stages = []
         self.page = page
@@ -444,7 +452,7 @@ class PageHandler(tornado.web.RequestHandler):
                 size=' {0:e} bytes'.format(len(response.body)) if response.body is not None else '',
                 time=response.request_time * 1000
             ),
-            extra = {"response": response, "request": request}
+            extra = {"_response": response, "_request": request}
         )
 
         if not request_types:
